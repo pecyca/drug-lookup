@@ -152,7 +152,7 @@
           `<b>🧾 Drug Information</b><br><br>` +
           `Name: ${name}<br>` +
           `Brand: ${brand}<br>` +
-          `RxCUI: <a href='https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}' target='_blank'>${rxcui}</a><br><br>` +
+          `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br><br>` +
           `<b>NDCs:</b><br><pre>${ndcListHTML}</pre>`;
         return;
       }
@@ -182,11 +182,11 @@
         `<b>NDC 1:</b><br>` +
         `Name: ${name1}<br>` +
         `Brand: ${brand1}<br>` +
-        `RxCUI: <a href='https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui1}' target='_blank'>${rxcui1}</a><br><br>` +
+        `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui1}' target='_blank'>${rxcui1}</a><br><br>` +
         `<b>NDC 2:</b><br>` +
         `Name: ${name2}<br>` +
         `Brand: ${brand2}<br>` +
-        `RxCUI: <a href='https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui2}' target='_blank'>${rxcui2}</a><br><br>` +
+        `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui2}' target='_blank'>${rxcui2}</a><br><br>` +
         `🔍 <i>Note: Two drugs may be clinically equivalent even if RxCUIs differ (e.g., different release forms or packages). Use clinical judgment and references.</i>`;
 
     } catch (err) {
