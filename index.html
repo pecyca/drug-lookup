@@ -88,14 +88,15 @@
   }
 
   async function getRxcuiFromInput(input) {
-    if (/^\d{10,11}$/.test(input.replace(/-/g, ''))) {
+    if (/\d{10,11}/.test(input.replace(/-/g, ''))) {
       const res = await fetch("https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=" + formatNdc(input));
       const json = await res.json();
       return json?.ndcPropertyList?.ndcProperty?.[0]?.rxcui || null;
     } else {
       const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(input));
       const json = await res.json();
-      return json?.approximateGroup?.candidate?.[0]?.rxcui || null;
+      const candidate = json?.approximateGroup?.candidate?.find(c => c.rxcui);
+      return candidate?.rxcui || null;
     }
   }
 
@@ -137,22 +138,22 @@
     try {
       const rxcui1 = await getRxcuiFromInput(input1);
       const prop1 = await getRxcuiProperties(rxcui1);
-      const brand1 = prop1?.brandName || prop1.name || 'Unknown';
+      const brand1 = prop1.brandName || prop1.name || 'Unknown';
       const form1 = prop1.synonym || 'Unknown';
 
       if (!input2) {
         output.innerHTML =
-          `<b>${brand1}</b><br>
-          RxCUI: ${rxcui1} — <a href='${rxcuiLink(rxcui1)}' target='_blank'>RxNav</a><br>
-          Form: ${form1}<br>
-          Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>
-          Details: <a href='${detailsLink(rxcui1)}' target='_blank'>More Info</a>`;
+          `<b>Brand:</b> ${brand1}<br>
+           <b>Form:</b> ${form1}<br>
+           <b>RxCUI:</b> ${rxcui1} — <a href='${rxcuiLink(rxcui1)}' target='_blank'>RxNav</a><br>
+           <b>Lexicomp:</b> <a href='${lexicompLink(input1)}' target='_blank'>View on Lexicomp</a><br>
+           <b>Details:</b> <a href='${detailsLink(rxcui1)}' target='_blank'>More Info</a>`;
         return;
       }
 
       const rxcui2 = await getRxcuiFromInput(input2);
       const prop2 = await getRxcuiProperties(rxcui2);
-      const brand2 = prop2?.brandName || prop2.name || 'Unknown';
+      const brand2 = prop2.brandName || prop2.name || 'Unknown';
       const form2 = prop2.synonym || 'Unknown';
 
       const sameRxcui = rxcui1 === rxcui2;
@@ -166,13 +167,13 @@
         Brand: ${brand1}<br>
         Form: ${form1}<br>
         RxCUI: ${rxcui1}<br>
-        Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>
+        Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>View on Lexicomp</a><br>
         Details: <a href='${detailsLink(rxcui1)}' target='_blank'>More Info</a><br><br>
         <b>NDC 2:</b><br>
         Brand: ${brand2}<br>
         Form: ${form2}<br>
         RxCUI: ${rxcui2}<br>
-        Lexicomp: <a href='${lexicompLink(input2)}' target='_blank'>Lexicomp</a><br>
+        Lexicomp: <a href='${lexicompLink(input2)}' target='_blank'>View on Lexicomp</a><br>
         Details: <a href='${detailsLink(rxcui2)}' target='_blank'>More Info</a><br><br>
         🔍 <i>Note: Two drugs may be clinically equivalent even if RxCUIs differ (e.g., different release forms or packages). Use judgment + references.</i>`;
 
