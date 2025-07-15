@@ -93,10 +93,10 @@
       const json = await res.json();
       return json?.ndcPropertyList?.ndcProperty?.[0]?.rxcui || null;
     } else {
-      const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(input));
+      const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(input) + "&maxEntries=20");
       const json = await res.json();
-      const candidate = json?.approximateGroup?.candidate?.find(c => c.rxcui);
-      return candidate?.rxcui || null;
+      const candidates = json?.approximateGroup?.candidate || [];
+      return candidates.length > 0 ? candidates[0].rxcui : null;
     }
   }
 
