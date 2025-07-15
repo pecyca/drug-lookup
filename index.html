@@ -122,23 +122,25 @@
     return json?.properties?.name || "Unknown";
   }
 
-  async function getNdcListFromRxcui(rxcui) {
+  async function getNdcDetailsFromRxcui(rxcui) {
     const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/ndcs.json");
     const json = await res.json();
-    return json?.ndcGroup?.ndcList?.ndc || [];
-  }
+    const ndcs = json?.ndcGroup?.ndcList?.ndc || [];
 
-  async function getNdcStatuses(rxcui) {
-    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/allProperties.json?prop=all");
-    const json = await res.json();
-    const ndcProps = json?.propConceptGroup?.propConcept || [];
-    const statuses = {};
-    ndcProps.forEach(p => {
-      if (p.propCategory === 'NDC' && p.propName === 'NDC_STATUS') {
-        statuses[p.propValue] = true;
-      }
-    });
-    return statuses;
+    const details = await Promise.all(ndcs.map(async ndc => {
+      const url = "https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=" + ndc;
+      const res = await fetch(url);
+      const json = await res.json();
+      const prop = json?.ndcPropertyList?.ndcProperty?.[0] || {};
+      return {
+        ndc,
+        brandName: prop?.proprietaryName || "",
+        labelerName: prop?.labelerName || "",
+        packageDescription: prop?.packageDescription || "",
+        status: prop?.ndcStatus || "Unknown"
+      };
+    }));
+    return details;
   }
 
   function lexicompLink(ndc) {
@@ -181,20 +183,18 @@
         let uniqueRxcuis = [...new Set(rxcuis)];
         let resultHTML = "";
         for (let rxcui of uniqueRxcuis) {
-          const [name, ndcs, statuses] = await Promise.all([
+          const [name, ndcDetails] = await Promise.all([
             getFullName(rxcui),
-            getNdcListFromRxcui(rxcui),
-            getNdcStatuses(rxcui)
+            getNdcDetailsFromRxcui(rxcui)
           ]);
 
           if (name === "Unknown") continue;
 
           resultHTML += `<b>${name}</b> — RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br>`;
-          if (ndcs.length) {
-            resultHTML += `<div class='child-result'><table class='ndc-table'><tr><th>NDC</th><th>Status</th><th>Lexicomp</th></tr>`;
-            ndcs.forEach(ndc => {
-              const status = statuses[ndc] || "Unknown";
-              resultHTML += `<tr><td>${ndc}</td><td>${status}</td><td><a href='${lexicompLink(ndc)}' target='_blank'>Lexicomp</a></td></tr>`;
+          if (ndcDetails.length) {
+            resultHTML += `<div class='child-result'><table class='ndc-table'><tr><th>NDC</th><th>Status</th><th>Brand</th><th>Labeler</th><th>Package</th><th>Lexicomp</th></tr>`;
+            ndcDetails.forEach(d => {
+              resultHTML += `<tr><td>${d.ndc}</td><td>${d.status}</td><td>${d.brandName}</td><td>${d.labelerName}</td><td>${d.packageDescription}</td><td><a href='${lexicompLink(d.ndc)}' target='_blank'>Lexicomp</a></td></tr>`;
             });
             resultHTML += `</table></div><br>`;
           }
