@@ -87,21 +87,22 @@
     return ndc.slice(0, 5) + '-' + ndc.slice(5, 9) + '-' + ndc.slice(9);
   }
 
-  async function getNdcProperties(ndc) {
-    const res = await fetch("https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=" + formatNdc(ndc));
-    const json = await res.json();
-    return json?.ndcPropertyList?.ndcProperty?.[0] || {};
+  async function getRxcuiFromInput(input) {
+    if (/^\d{10,11}$/.test(input.replace(/-/g, ''))) {
+      const res = await fetch("https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=" + formatNdc(input));
+      const json = await res.json();
+      return json?.ndcPropertyList?.ndcProperty?.[0]?.rxcui || null;
+    } else {
+      const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(input));
+      const json = await res.json();
+      return json?.approximateGroup?.candidate?.[0]?.rxcui || null;
+    }
   }
 
-  async function getBrandName(rxcui) {
-    try {
-      const res = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/related.json?tty=BN`);
-      const json = await res.json();
-      const props = json?.relatedGroup?.conceptGroup?.[0]?.conceptProperties;
-      return props?.[0]?.name || "Unknown";
-    } catch {
-      return "Unknown";
-    }
+  async function getRxcuiProperties(rxcui) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/properties.json");
+    const json = await res.json();
+    return json?.properties || {};
   }
 
   function rxcuiLink(rxcui) {
@@ -134,26 +135,25 @@
     }
 
     try {
-      const prop1 = await getNdcProperties(input1);
-      const rxcui1 = prop1.rxcui;
-      const brand1 = prop1.proprietaryName || 'Unknown';
-      const form1 = prop1.name || 'Unknown';
+      const rxcui1 = await getRxcuiFromInput(input1);
+      const prop1 = await getRxcuiProperties(rxcui1);
+      const brand1 = prop1.name || 'Unknown';
+      const form1 = prop1.synonym || 'Unknown';
 
       if (!input2) {
         output.innerHTML =
           `<b>${brand1}</b><br>
-          NDC: ${input1}<br>
-          Form: ${form1}<br>
           RxCUI: ${rxcui1} — <a href='${rxcuiLink(rxcui1)}' target='_blank'>RxNav</a><br>
-          Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Link</a><br>
+          Form: ${form1}<br>
+          Click for Lexicomp Information: <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>
           Details: <a href='${detailsLink(rxcui1)}' target='_blank'>More Info</a>`;
         return;
       }
 
-      const prop2 = await getNdcProperties(input2);
-      const rxcui2 = prop2.rxcui;
-      const brand2 = prop2.proprietaryName || 'Unknown';
-      const form2 = prop2.name || 'Unknown';
+      const rxcui2 = await getRxcuiFromInput(input2);
+      const prop2 = await getRxcuiProperties(rxcui2);
+      const brand2 = prop2.name || 'Unknown';
+      const form2 = prop2.synonym || 'Unknown';
 
       const sameRxcui = rxcui1 === rxcui2;
       const status = sameRxcui
@@ -166,14 +166,14 @@
         Brand: ${brand1}<br>
         Form: ${form1}<br>
         RxCUI: ${rxcui1}<br>
-        <a href='${lexicompLink(input1)}' target='_blank'>Click for more information</a><br>
-        <a href='${detailsLink(rxcui1)}' target='_blank'>Click for Detailed Info (NDC 1)</a><br><br>
+        Click for Lexicomp Information: <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>
+        Details: <a href='${detailsLink(rxcui1)}' target='_blank'>More Info</a><br><br>
         <b>NDC 2:</b><br>
         Brand: ${brand2}<br>
         Form: ${form2}<br>
         RxCUI: ${rxcui2}<br>
-        <a href='${lexicompLink(input2)}' target='_blank'>Click for more information</a><br>
-        <a href='${detailsLink(rxcui2)}' target='_blank'>Click for Detailed Info (NDC 2)</a><br><br>
+        Click for Lexicomp Information: <a href='${lexicompLink(input2)}' target='_blank'>Lexicomp</a><br>
+        Details: <a href='${detailsLink(rxcui2)}' target='_blank'>More Info</a><br><br>
         🔍 <i>Note: Two drugs may be clinically equivalent even if RxCUIs differ (e.g., different release forms or packages). Use judgment + references.</i>`;
 
     } catch (err) {
