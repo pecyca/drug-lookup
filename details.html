@@ -62,7 +62,26 @@
 
       const propsRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/allProperties.json?prop=all`);
       const propsData = await propsRes.json();
-      const setid = propsData?.propConceptGroup?.propConcept?.find(p => p.propName === 'SPL SET ID')?.propValue;
+
+      let setid = null;
+
+      const propConcepts = propsData?.propConceptGroup?.propConcept || [];
+      for (const item of propConcepts) {
+        if (item.propName === 'SPL SET ID') {
+          setid = item.propValue;
+          break;
+        }
+      }
+
+      if (!setid) {
+        const properties = propsData?.rxnormProperty || [];
+        for (const item of properties) {
+          if (item.propName === 'SPL SET ID') {
+            setid = item.propValue;
+            break;
+          }
+        }
+      }
 
       if (!setid) {
         document.getElementById('details').innerHTML = 'No SPL SET ID found.';
