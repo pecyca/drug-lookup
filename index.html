@@ -100,6 +100,13 @@
     }
   }
 
+  async function getBrandName(rxcui) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/related.json?tty=BN");
+    const json = await res.json();
+    const props = json?.relatedGroup?.conceptGroup?.[0]?.conceptProperties;
+    return props?.[0]?.name || "Unknown";
+  }
+
   async function getRxcuiProperties(rxcui) {
     const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/properties.json");
     const json = await res.json();
@@ -137,9 +144,11 @@
 
     try {
       const rxcui1 = await getRxcuiFromInput(input1);
-      const prop1 = await getRxcuiProperties(rxcui1);
-      const brand1 = prop1.brandName || prop1.name || 'Unknown';
-      const form1 = prop1.synonym || 'Unknown';
+      const [brand1, prop1] = await Promise.all([
+        getBrandName(rxcui1),
+        getRxcuiProperties(rxcui1)
+      ]);
+      const form1 = prop1.synonym || prop1.name || 'Unknown';
 
       if (!input2) {
         output.innerHTML =
@@ -152,9 +161,11 @@
       }
 
       const rxcui2 = await getRxcuiFromInput(input2);
-      const prop2 = await getRxcuiProperties(rxcui2);
-      const brand2 = prop2.brandName || prop2.name || 'Unknown';
-      const form2 = prop2.synonym || 'Unknown';
+      const [brand2, prop2] = await Promise.all([
+        getBrandName(rxcui2),
+        getRxcuiProperties(rxcui2)
+      ]);
+      const form2 = prop2.synonym || prop2.name || 'Unknown';
 
       const sameRxcui = rxcui1 === rxcui2;
       const status = sameRxcui
