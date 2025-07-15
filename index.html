@@ -103,7 +103,7 @@
   async function getBrandName(rxcui) {
     const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/related.json?tty=BN");
     const json = await res.json();
-    const props = json?.relatedGroup?.conceptGroup?.[0]?.conceptProperties;
+    const props = json?.relatedGroup?.conceptGroup?.flatMap(group => group.conceptProperties || []);
     return props?.[0]?.name || "Unknown";
   }
 
