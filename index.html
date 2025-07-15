@@ -41,6 +41,20 @@
     .child-result {
       margin-left: 20px;
     }
+    .ndc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    .ndc-table th, .ndc-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    .ndc-table th {
+      background-color: #e0caff;
+      color: #2e003e;
+    }
     .disclaimer {
       margin-top: 40px;
       font-size: 0.85em;
@@ -132,42 +146,32 @@
         displayHTML += `RxCUI: ${prop1.rxcui || 'Unknown'}<br>`;
         displayHTML += `Labeler: ${prop1.labelerName || 'Unknown'}<br>`;
         displayHTML += `Package: ${prop1.packageDescription || 'Unknown'}<br>`;
+        displayHTML += `Status: ${prop1.ndcStatus || 'Unknown'}<br>`;
         displayHTML += `Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Link</a><br>`;
         output.innerHTML = displayHTML;
         return;
       }
 
       const prop2 = await getNdcProperties(input2);
+
       const rxcui1 = prop1.rxcui;
       const rxcui2 = prop2.rxcui;
 
-      const match = rxcui1 && rxcui2 && rxcui1 === rxcui2;
+      if (!rxcui1 || !rxcui2) {
+        output.innerHTML = "One or both NDCs could not be resolved to an RxCUI.";
+        return;
+      }
+
+      const match = rxcui1 === rxcui2;
       const status = match
         ? "✔️ <b>Equivalent RxCUI</b>"
         : "⚠️ <b>Different RxCUI</b> — may still be clinically equivalent";
 
       displayHTML += `${status}<br><br>`;
-      displayHTML += `<table class="ndc-table">
-        <tr><th></th><th>NDC</th><th>RxCUI</th><th>Labeler</th><th>Package</th><th>Lexicomp</th></tr>
-        <tr>
-          <td><b>Box 1</b></td>
-          <td>${input1}</td>
-          <td>${rxcui1 || 'Unknown'}</td>
-          <td>${prop1.labelerName || 'Unknown'}</td>
-          <td>${prop1.packageDescription || 'Unknown'}</td>
-          <td><a href='${lexicompLink(input1)}' target='_blank'>Link</a></td>
-        </tr>
-        <tr>
-          <td><b>Box 2</b></td>
-          <td>${input2}</td>
-          <td>${rxcui2 || 'Unknown'}</td>
-          <td>${prop2.labelerName || 'Unknown'}</td>
-          <td>${prop2.packageDescription || 'Unknown'}</td>
-          <td><a href='${lexicompLink(input2)}' target='_blank'>Link</a></td>
-        </tr>
-      </table>`;
-
+      displayHTML += `NDC 1 RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui1}' target='_blank'>${rxcui1}</a> — <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>`;
+      displayHTML += `NDC 2 RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui2}' target='_blank'>${rxcui2}</a> — <a href='${lexicompLink(input2)}' target='_blank'>Lexicomp</a><br>`;
       displayHTML += `<br>🔍 <i>Note: Use clinical judgment. RxCUI mismatch doesn't guarantee clinical difference.</i>`;
+
       output.innerHTML = displayHTML;
     } catch (err) {
       output.innerHTML = "⚠️ Error: " + err.message;
