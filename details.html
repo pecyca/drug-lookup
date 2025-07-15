@@ -7,106 +7,123 @@
       font-family: Arial, sans-serif;
       background-color: #fdf9ff;
       color: #2e003e;
-      max-width: 1000px;
+      max-width: 700px;
       margin: auto;
       padding: 20px;
     }
-    h2, h3 {
+    h2 {
       color: #5a189a;
     }
-    .section {
-      background-color: #f3e8ff;
+    .details-section {
+      background: #f3e8ff;
       padding: 15px;
-      margin-bottom: 15px;
-      border-left: 5px solid #9d4edd;
+      border-left: 4px solid #9d4edd;
+      margin-top: 20px;
     }
-    .section h3 {
-      margin-top: 0;
+    .error {
+      color: #b30000;
+      font-weight: bold;
     }
     .loading {
-      font-style: italic;
+      color: #5a189a;
+    }
+    a {
+      color: #5a189a;
     }
   </style>
 </head>
 <body>
-  <h2>Drug Details</h2>
-  <div id="details" class="loading">Loading drug information...</div>
+  <h2>Drug Detailed Information</h2>
+  <div id="info" class="details-section loading">Loading...</div>
+  <div style="margin-top:1em;">
+    <a href="index.html">&larr; Back to Drug Lookup</a>
+  </div>
 
-  <script>
-    async function fetchDailyMedInfo(setid) {
-      const url = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${setid}/content.xml`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch DailyMed XML');
-      const xml = await response.text();
-      return new window.DOMParser().parseFromString(xml, 'text/xml');
+<script>
+  // Helper to get query param
+  function getQueryParam(name) {
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name);
+  }
+
+  // Main details loader
+  async function loadDetails() {
+    const infoDiv = document.getElementById("info");
+    const rxcui = getQueryParam("rxcui");
+    if (!rxcui) {
+      infoDiv.innerHTML = '<span class="error">No RxCUI provided in URL.</span>';
+      return;
+    }
+    infoDiv.innerHTML = 'Looking up SPL Set ID from RxNorm...';
+
+    // 1. Get SPL_SET_ID from RxNorm
+    let splSetId = null;
+    try {
+      const rxRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/allProperties.json?prop=all`);
+      const rxJson = await rxRes.json();
+      const props = rxJson?.propConceptGroup?.propConcept || [];
+      const spl = props.find(p => p.propName === "SPL_SET_ID");
+      if (spl) splSetId = spl.propValue;
+    } catch (err) {
+      // ignore, error handled below
     }
 
-    function extractSection(xml, tagName, sectionTitle) {
-      const sections = xml.getElementsByTagName(tagName);
-      for (let section of sections) {
-        const title = section.getElementsByTagName('title')[0]?.textContent?.toLowerCase();
-        if (title && title.includes(sectionTitle.toLowerCase())) {
-          return section.textContent;
-        }
-      }
-      return 'Not available';
+    if (!splSetId) {
+      infoDiv.innerHTML = `
+        <span class="error">Failed to retrieve SPL Set ID for this RxCUI.<br>
+        This drug may not have a DailyMed record linked to this RxCUI.<br>
+        <br>
+        <a href="https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${encodeURIComponent(rxcui)}" target="_blank">View in RxNav</a>
+        </span>
+      `;
+      return;
     }
 
-    async function loadDetails() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const rxcui = urlParams.get('rxcui');
-      if (!rxcui) {
-        document.getElementById('details').innerHTML = 'No RxCUI provided.';
-        return;
-      }
+    // 2. Fetch details from DailyMed using SPL_SET_ID
+    infoDiv.innerHTML = 'Fetching details from DailyMed...';
+    try {
+      const dailyMedRes = await fetch(`https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${splSetId}.json`);
+      if (!dailyMedRes.ok) throw new Error('DailyMed returned non-OK status');
+      const dailyMedJson = await dailyMedRes.json();
 
-      let setid = null;
-      try {
-        const splRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/spls.json`);
-        const splData = await splRes.json();
-        setid = splData?.splSetIdList?.splSetId?.[0];
-      } catch (err) {
-        document.getElementById('details').innerHTML = 'Failed to retrieve SPL SET ID.';
-        return;
-      }
+      // Basic summary rendering
+      const setInfo = dailyMedJson.data?.spls?.[0];
+      if (!setInfo) throw new Error('No SPL data found');
 
-      if (!setid) {
-        document.getElementById('details').innerHTML = 'No SPL SET ID found.';
-        return;
-      }
-
-      try {
-        const xml = await fetchDailyMedInfo(setid);
-
-        const storage = extractSection(xml, 'sect', 'storage');
-        const handling = extractSection(xml, 'sect', 'handling');
-        const dosage = extractSection(xml, 'sect', 'dosage');
-        const preparations = extractSection(xml, 'sect', 'how supplied');
-
-        document.getElementById('details').innerHTML = `
-          <div class="section">
-            <h3>Storage</h3>
-            <p>${storage}</p>
-          </div>
-          <div class="section">
-            <h3>Handling</h3>
-            <p>${handling}</p>
-          </div>
-          <div class="section">
-            <h3>Dosage & Administration</h3>
-            <p>${dosage}</p>
-          </div>
-          <div class="section">
-            <h3>Available Preparations</h3>
-            <p>${preparations}</p>
-          </div>
-        `;
-      } catch (err) {
-        document.getElementById('details').innerHTML = 'Error retrieving drug details.';
-      }
+      infoDiv.innerHTML = `
+        <b>${setInfo.title || "No Title"}</b><br>
+        <b>Set ID:</b> ${splSetId}<br>
+        <b>RxCUI:</b> ${rxcui}<br>
+        <b>Published Date:</b> ${setInfo.publishedDate ? new Date(setInfo.publishedDate).toLocaleDateString() : 'N/A'}<br>
+        <br>
+        <b>Products:</b><br>
+        <ul>
+          ${(setInfo.products || []).map(prod =>
+            `<li>${prod.name || prod.ndc} (${prod.ndc || "No NDC"})</li>`
+          ).join('')}
+        </ul>
+        <br>
+        <b>Full Label:</b>
+        <a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${splSetId}" target="_blank">View on DailyMed</a>
+        <br><br>
+        <b>Sources:</b>
+        <ul>
+          <li><a href="https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${encodeURIComponent(rxcui)}" target="_blank">RxNav Record</a></li>
+          <li><a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${splSetId}" target="_blank">DailyMed Entry</a></li>
+        </ul>
+      `;
+    } catch (e) {
+      infoDiv.innerHTML = `
+        <span class="error">Failed to fetch details from DailyMed.<br>
+        <small>${e.message}</small>
+        </span>
+        <br>
+        <a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${splSetId}" target="_blank">Try viewing on DailyMed</a>
+      `;
     }
+  }
 
-    loadDetails();
-  </script>
+  window.onload = loadDetails;
+</script>
 </body>
 </html>
