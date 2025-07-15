@@ -1,93 +1,215 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Drug Detail Lookup</title>
+  <title>Drug Info & NDC Comparison</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background-color: #fdf9ff;
       padding: 20px;
-      max-width: 700px;
+      max-width: 1000px;
       margin: auto;
+      color: #2e003e;
+    }
+    h2, h3 {
+      color: #5a189a;
+    }
+    input, button {
+      padding: 10px;
+      margin: 5px 0;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 4px;
       font-size: 14px;
-      line-height: 1.4;
     }
-    .section {
-      background: #f9f9f9;
-      margin-bottom: 10px;
-      padding: 10px 15px;
-      border-left: 4px solid #ccc;
+    button {
+      background-color: #7209b7;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
     }
-    .section h3 {
-      margin: 0 0 5px 0;
-      font-size: 16px;
+    button:hover {
+      background-color: #560bad;
     }
-    .error {
-      color: red;
+    .result-section {
+      background: #f3e8ff;
+      padding: 15px;
+      margin-top: 10px;
+      border-left: 4px solid #9d4edd;
+    }
+    .ndc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    .ndc-table th, .ndc-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    .ndc-table th {
+      background-color: #e0caff;
+      color: #2e003e;
+    }
+    .disclaimer {
+      margin-top: 40px;
+      font-size: 0.85em;
+      color: #666;
+      border-top: 1px solid #ccc;
+      padding-top: 15px;
+    }
+    .note {
+      font-size: 0.9em;
+      color: #444;
+      margin-bottom: 15px;
+    }
+    a {
+      color: #5a189a;
     }
   </style>
 </head>
 <body>
-  <h2>Drug Detail Lookup</h2>
-  <div id="content">Loading...</div>
+  <h2>Drug Info & NDC Comparison</h2>
 
-  <script>
-    async function getJsonSafely(url) {
-      const res = await fetch(url);
-      const text = await res.text();
-      if (!text.startsWith('{')) throw new Error('No data or invalid format from: ' + url);
-      return JSON.parse(text);
+  <div class="note">
+    Enter an <strong>NDC</strong> or <strong>Drug Name</strong> into Box 1 to look up drug information.<br>
+    Optionally, enter a second NDC into Box 2 to compare for equivalence.<br>
+    <strong>Box 2 is optional.</strong>
+  </div>
+
+  <label for="ndc1">Box 1 (NDC or Drug Name):</label>
+  <input type="text" id="ndc1" onkeypress="if(event.key === 'Enter') compareNDCs()" />
+
+  <label for="ndc2">Box 2 (NDC optional):</label>
+  <input type="text" id="ndc2" onkeypress="if(event.key === 'Enter') compareNDCs()" />
+
+  <button onclick="compareNDCs()">Compare or Lookup</button>
+  <button onclick="resetForm()">Reset</button>
+
+  <h3>Result:</h3>
+  <div id="result" class="result-section">Results will appear here...</div>
+
+  <div class="disclaimer">
+    <strong>Disclaimer:</strong> This tool is in <em>beta</em> and intended for informational purposes only.
+    Data is sourced from public APIs and may not reflect the most current or complete information.
+  </div>
+
+<script>
+  function formatNdc(ndc) {
+    ndc = ndc.replace(/[^0-9]/g, '').padStart(11, '0');
+    return ndc.slice(0, 5) + '-' + ndc.slice(5, 9) + '-' + ndc.slice(9);
+  }
+
+  async function getRxcuiFromNdc(ndc) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=" + formatNdc(ndc));
+    const json = await res.json();
+    return json?.ndcPropertyList?.ndcProperty?.[0]?.rxcui || null;
+  }
+
+  async function getRxcuiCandidates(name) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(name));
+    const json = await res.json();
+    return json?.approximateGroup?.candidate?.map(c => c.rxcui) || [];
+  }
+
+  async function getFullName(rxcui) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/properties.json");
+    const json = await res.json();
+    return json?.properties?.name || "Unknown";
+  }
+
+  async function getNdcListFromRxcui(rxcui) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/ndcs.json");
+    const json = await res.json();
+    return json?.ndcGroup?.ndcList?.ndc || [];
+  }
+
+  function lexicompLink(ndc) {
+    return `https://online.lexi.com/lco/action/search?q=${ndc}&t=name`;
+  }
+
+  function resetForm() {
+    document.getElementById("ndc1").value = "";
+    document.getElementById("ndc2").value = "";
+    document.getElementById("result").innerHTML = "Results will appear here...";
+  }
+
+  async function compareNDCs() {
+    const input1 = document.getElementById("ndc1").value.trim();
+    const input2 = document.getElementById("ndc2").value.trim();
+    const output = document.getElementById("result");
+    output.innerHTML = "Loading...";
+
+    if (!input1 && !input2) {
+      output.innerHTML = "Please enter a value in Box 1.";
+      return;
     }
 
-    async function getDailyMedStructuredData(name) {
-      const searchUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?drug_name=${encodeURIComponent(name)}`;
-      const searchRes = await fetch(searchUrl);
-      const searchJson = await searchRes.json();
-      const setId = searchJson?.data?.[0]?.setid;
-      if (!setId) return null;
+    try {
+      if (input1 && !input2) {
+        let rxcuis = [];
+        let rxcuiFromNdc = await getRxcuiFromNdc(input1);
 
-      const structuredUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${setId}/structured-product-labeling.json`;
-      const structuredRes = await fetch(structuredUrl);
-      const structuredJson = await structuredRes.json();
+        if (rxcuiFromNdc) {
+          rxcuis = [rxcuiFromNdc];
+        } else {
+          rxcuis = await getRxcuiCandidates(input1);
+        }
 
-      return structuredJson?.data || null;
-    }
+        if (!rxcuis.length) {
+          output.innerHTML = "No RxCUI found for input.";
+          return;
+        }
 
-    async function loadDetails() {
-      const params = new URLSearchParams(window.location.search);
-      const rxcui = params.get("rxcui");
-      const content = document.getElementById("content");
+        let resultHTML = "";
+        for (let rxcui of rxcuis) {
+          const [name, ndcs] = await Promise.all([
+            getFullName(rxcui),
+            getNdcListFromRxcui(rxcui)
+          ]);
 
-      if (!rxcui) {
-        content.innerHTML = '<div class="error">No RxCUI provided in the URL.</div>';
+          resultHTML += `<b>${name}</b> — RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br>`;
+          if (ndcs.length) {
+            resultHTML += `<table class='ndc-table'><tr><th>NDC</th><th>Lexicomp</th></tr>`;
+            ndcs.forEach(ndc => {
+              resultHTML += `<tr><td>${ndc}</td><td><a href='${lexicompLink(ndc)}' target='_blank'>Lexicomp</a></td></tr>`;
+            });
+            resultHTML += `</table><br>`;
+          } else {
+            resultHTML += `No NDCs found.<br><br>`;
+          }
+        }
+        output.innerHTML = resultHTML;
         return;
       }
 
-      try {
-        const properties = await getJsonSafely(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/properties.json`);
-        const name = properties?.properties?.name || "";
+      // NDC vs NDC comparison
+      const [rxcui1, rxcui2] = await Promise.all([
+        getRxcuiFromNdc(input1),
+        getRxcuiFromNdc(input2)
+      ]);
 
-        let dailyMedHTML = "<div class=\"section\"><h3>DailyMed</h3>Information not available.</div>";
-        const dailymedData = await getDailyMedStructuredData(name);
-
-        if (dailymedData) {
-          dailyMedHTML = `
-            <div class="section">
-              <h3>DailyMed</h3>
-              <strong>Storage:</strong> ${dailymedData.storage || "N/A"}<br>
-              <strong>Dosage and Administration:</strong> ${dailymedData.dosage_and_administration || "N/A"}<br>
-              <strong>How Supplied:</strong> ${dailymedData.how_supplied || "N/A"}<br>
-              <strong>Indications and Usage:</strong> ${dailymedData.indications_and_usage || "N/A"}<br>
-            </div>
-          `;
-        }
-
-        content.innerHTML = `${dailyMedHTML}`;
-      } catch (err) {
-        content.innerHTML = `<div class="error">Error loading details: ${err.message}</div>`;
+      if (!rxcui1 || !rxcui2) {
+        output.innerHTML = "One or both NDCs not found.";
+        return;
       }
-    }
 
-    loadDetails();
-  </script>
+      const match = rxcui1 === rxcui2;
+      const status = match
+        ? "✔️ <b>Equivalent RxCUI</b>"
+        : "⚠️ <b>Different RxCUI</b> — may still be clinically equivalent";
+
+      output.innerHTML =
+        `${status}<br><br>` +
+        `NDC 1 RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui1}' target='_blank'>${rxcui1}</a> — <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>` +
+        `NDC 2 RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui2}' target='_blank'>${rxcui2}</a> — <a href='${lexicompLink(input2)}' target='_blank'>Lexicomp</a><br>` +
+        `<br>🔍 <i>Note: Use clinical judgment. RxCUI mismatch doesn't guarantee clinical difference.</i>`;
+
+    } catch (err) {
+      output.innerHTML = "⚠️ Error: " + err.message;
+    }
+  }
+</script>
 </body>
 </html>
