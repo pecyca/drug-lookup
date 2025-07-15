@@ -128,6 +128,19 @@
     return json?.ndcGroup?.ndcList?.ndc || [];
   }
 
+  async function getNdcStatuses(rxcui) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/allProperties.json?prop=all");
+    const json = await res.json();
+    const ndcProps = json?.propConceptGroup?.propConcept || [];
+    const statuses = {};
+    ndcProps.forEach(p => {
+      if (p.propCategory === 'NDC' && p.propName === 'NDC_STATUS') {
+        statuses[p.propValue] = true;
+      }
+    });
+    return statuses;
+  }
+
   function lexicompLink(ndc) {
     return `https://online.lexi.com/lco/action/search?q=${ndc}&t=name`;
   }
@@ -168,20 +181,22 @@
         let uniqueRxcuis = [...new Set(rxcuis)];
         let resultHTML = "";
         for (let rxcui of uniqueRxcuis) {
-          const [name, ndcs] = await Promise.all([
+          const [name, ndcs, statuses] = await Promise.all([
             getFullName(rxcui),
-            getNdcListFromRxcui(rxcui)
+            getNdcListFromRxcui(rxcui),
+            getNdcStatuses(rxcui)
           ]);
+
+          if (name === "Unknown") continue;
 
           resultHTML += `<b>${name}</b> — RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br>`;
           if (ndcs.length) {
-            resultHTML += `<div class='child-result'><table class='ndc-table'><tr><th>NDC</th><th>Lexicomp</th></tr>`;
+            resultHTML += `<div class='child-result'><table class='ndc-table'><tr><th>NDC</th><th>Status</th><th>Lexicomp</th></tr>`;
             ndcs.forEach(ndc => {
-              resultHTML += `<tr><td>${ndc}</td><td><a href='${lexicompLink(ndc)}' target='_blank'>Lexicomp</a></td></tr>`;
+              const status = statuses[ndc] || "Unknown";
+              resultHTML += `<tr><td>${ndc}</td><td>${status}</td><td><a href='${lexicompLink(ndc)}' target='_blank'>Lexicomp</a></td></tr>`;
             });
             resultHTML += `</table></div><br>`;
-          } else {
-            resultHTML += `<div class='child-result'>No NDCs found.</div><br>`;
           }
         }
         output.innerHTML = resultHTML;
