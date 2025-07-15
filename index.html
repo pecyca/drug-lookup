@@ -66,12 +66,13 @@
   </div>
 
   <label for="ndc1">Box 1 (NDC or Drug Name):</label>
-  <input type="text" id="ndc1" />
+  <input type="text" id="ndc1" onkeypress="if(event.key === 'Enter') compareNDCs()" />
 
   <label for="ndc2">Box 2 (NDC optional):</label>
-  <input type="text" id="ndc2" />
+  <input type="text" id="ndc2" onkeypress="if(event.key === 'Enter') compareNDCs()" />
 
   <button onclick="compareNDCs()">Compare or Lookup</button>
+  <button onclick="resetForm()">Reset</button>
 
   <h3>Result:</h3>
   <pre id="result">Results will appear here...</pre>
@@ -119,6 +120,12 @@
 
   function lexicompLink(ndc) {
     return `https://online.lexi.com/lco/action/search?q=${ndc}&t=name`;
+  }
+
+  function resetForm() {
+    document.getElementById("ndc1").value = "";
+    document.getElementById("ndc2").value = "";
+    document.getElementById("result").innerHTML = "Results will appear here...";
   }
 
   async function compareNDCs() {
