@@ -39,12 +39,17 @@
     <a href="index.html">&larr; Back to Drug Lookup</a>
   </div>
 <script>
+  // Util: Get query param from URL
   function getQueryParam(name) {
     const params = new URLSearchParams(window.location.search);
     return params.get(name);
   }
-
-  // Always show a fallback manual link
+  // Util: Format NDC to dashed style (#####-####-##)
+  function formatNdcDashed(ndc) {
+    ndc = ndc.replace(/[^0-9]/g, '').padStart(11, '0');
+    return ndc.slice(0, 5) + '-' + ndc.slice(5, 9) + '-' + ndc.slice(9);
+  }
+  // Manual links fallback
   function manualLinks({ setid, ndc, rxcui }) {
     let links = [];
     if (setid) links.push(`<a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${setid}" target="_blank">View on DailyMed (by Set ID)</a>`);
@@ -52,65 +57,7 @@
     if (rxcui) links.push(`<a href="https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${encodeURIComponent(rxcui)}" target="_blank">View in RxNav (by RxCUI)</a>`);
     return links.length ? `<br><br><b>Manual Links:</b><br>${links.join('<br>')}` : '';
   }
-
-  async function loadDetails() {
-    const infoDiv = document.getElementById("info");
-    // Gather identifiers
-    let setid = getQueryParam("setid");
-    let ndc = getQueryParam("ndc");
-    let rxcui = getQueryParam("rxcui");
-
-    // Priority: Set ID
-    if (setid) {
-      // Try DailyMed API by Set ID
-      infoDiv.innerHTML = `Fetching details from DailyMed using Set ID...`;
-      if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
-      // If API fails, show manual link
-      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
-      return;
-    }
-
-    // Next, try NDC
-    if (ndc) {
-      infoDiv.innerHTML = `Fetching SPL Set ID from DailyMed using NDC...`;
-      let ndcClean = ndc.replace(/[^0-9]/g, "");
-      try {
-        let ndcRes = await fetch(`https://dailymed.nlm.nih.gov/dailymed/services/v2/ndc/${ndcClean}.json`);
-        if (ndcRes.ok) {
-          let ndcJson = await ndcRes.json();
-          let spls = ndcJson.data?.spls;
-          if (spls && spls.length > 0 && spls[0].setid) {
-            setid = spls[0].setid;
-            if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
-          }
-        }
-      } catch (err) {}
-      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
-      return;
-    }
-
-    // Last, try RxCUI → Set ID via RxNorm
-    if (rxcui) {
-      infoDiv.innerHTML = `Looking up SPL Set ID from RxNorm using RxCUI...`;
-      try {
-        const rxRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/allProperties.json?prop=all`);
-        const rxJson = await rxRes.json();
-        const props = rxJson?.propConceptGroup?.propConcept || [];
-        const spl = props.find(p => p.propName === "SPL_SET_ID");
-        if (spl?.propValue) {
-          setid = spl.propValue;
-          if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
-        }
-      } catch (err) {}
-      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
-      return;
-    }
-
-    // If nothing provided
-    infoDiv.innerHTML = `<span class="error">No RxCUI, NDC, or Set ID provided in URL!</span>`;
-  }
-
-  // Fetch & display info from DailyMed using Set ID
+  // Try to fetch and render from DailyMed SPL Set ID
   async function fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui }) {
     try {
       const dailyMedRes = await fetch(`https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${setid}.json`);
@@ -141,7 +88,67 @@
       return false;
     }
   }
-
+  // Fetch Set ID given an NDC (using v1, dashed)
+  async function getSetIdFromNdc(ndc) {
+    const dashedNdc = formatNdcDashed(ndc);
+    const url = `https://dailymed.nlm.nih.gov/dailymed/services/v1/ndc/${dashedNdc}/spls.json`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const arr = await res.json();
+      return arr.length > 0 ? arr[0] : null; // First Set ID
+    } catch (e) {
+      return null;
+    }
+  }
+  // Fetch Set ID given RxCUI (via RxNorm)
+  async function getSetIdFromRxcui(rxcui) {
+    try {
+      const rxRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/allProperties.json?prop=all`);
+      const rxJson = await rxRes.json();
+      const props = rxJson?.propConceptGroup?.propConcept || [];
+      const spl = props.find(p => p.propName === "SPL_SET_ID");
+      return spl?.propValue || null;
+    } catch (e) {
+      return null;
+    }
+  }
+  // Main loader: Most reliable method first, always manual fallback
+  async function loadDetails() {
+    const infoDiv = document.getElementById("info");
+    let setid = getQueryParam("setid");
+    let ndc = getQueryParam("ndc");
+    let rxcui = getQueryParam("rxcui");
+    // 1. Set ID direct
+    if (setid) {
+      infoDiv.innerHTML = `Fetching details from DailyMed using Set ID...`;
+      if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
+      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
+      return;
+    }
+    // 2. NDC via v1 endpoint (dashed)
+    if (ndc) {
+      infoDiv.innerHTML = `Looking up SPL Set ID from DailyMed (v1) using NDC...`;
+      setid = await getSetIdFromNdc(ndc);
+      if (setid) {
+        if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
+      }
+      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
+      return;
+    }
+    // 3. RxCUI via RxNorm to Set ID
+    if (rxcui) {
+      infoDiv.innerHTML = `Looking up SPL Set ID from RxNorm using RxCUI...`;
+      setid = await getSetIdFromRxcui(rxcui);
+      if (setid) {
+        if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
+      }
+      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
+      return;
+    }
+    // 4. No identifiers at all
+    infoDiv.innerHTML = `<span class="error">No RxCUI, NDC, or Set ID provided in URL!</span>`;
+  }
   window.onload = loadDetails;
 </script>
 </body>
