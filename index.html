@@ -38,8 +38,19 @@
       margin-top: 10px;
       border-left: 4px solid #9d4edd;
     }
-    .child-result {
-      margin-left: 20px;
+    .ndc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    .ndc-table th, .ndc-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    .ndc-table th {
+      background-color: #e0caff;
+      color: #2e003e;
     }
     .disclaimer {
       margin-top: 40px;
@@ -90,15 +101,28 @@
     return ndc.slice(0, 5) + '-' + ndc.slice(5, 9) + '-' + ndc.slice(9);
   }
 
-  async function getNdcProperties(ndc) {
+  async function getRxcuiFromNdc(ndc) {
     const res = await fetch("https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=" + formatNdc(ndc));
     const json = await res.json();
-    return json?.ndcPropertyList?.ndcProperty?.[0] || {};
+    return json?.ndcPropertyList?.ndcProperty?.[0]?.rxcui || null;
   }
 
-  async function getRxcuiFromNdc(ndc) {
-    const prop = await getNdcProperties(ndc);
-    return prop?.rxcui || null;
+  async function getRxcuiCandidates(name) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(name));
+    const json = await res.json();
+    return json?.approximateGroup?.candidate?.map(c => c.rxcui) || [];
+  }
+
+  async function getFullName(rxcui) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/properties.json");
+    const json = await res.json();
+    return json?.properties?.name || "Unknown";
+  }
+
+  async function getNdcListFromRxcui(rxcui) {
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/ndcs.json");
+    const json = await res.json();
+    return json?.ndcGroup?.ndcList?.ndc || [];
   }
 
   function lexicompLink(ndc) {
@@ -123,52 +147,65 @@
     }
 
     try {
-      const prop1 = await getNdcProperties(input1);
-      let displayHTML = "";
+      if (input1 && !input2) {
+        let rxcuis = [];
+        let rxcuiFromNdc = await getRxcuiFromNdc(input1);
 
-      if (!input2) {
-        displayHTML += `<b>${prop1.proprietaryName || 'Unknown'}</b><br>`;
-        displayHTML += `NDC: ${input1}<br>`;
-        displayHTML += `RxCUI: ${prop1.rxcui || 'Unknown'}<br>`;
-        displayHTML += `Labeler: ${prop1.labelerName || 'Unknown'}<br>`;
-        displayHTML += `Package: ${prop1.packageDescription || 'Unknown'}<br>`;
-        displayHTML += `Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Link</a><br>`;
-        output.innerHTML = displayHTML;
+        if (rxcuiFromNdc) {
+          rxcuis = [rxcuiFromNdc];
+        } else {
+          rxcuis = await getRxcuiCandidates(input1);
+        }
+
+        if (!rxcuis.length) {
+          output.innerHTML = "No RxCUI found for input.";
+          return;
+        }
+
+        let resultHTML = "";
+        for (let rxcui of rxcuis) {
+          const [name, ndcs] = await Promise.all([
+            getFullName(rxcui),
+            getNdcListFromRxcui(rxcui)
+          ]);
+
+          resultHTML += `<b>${name}</b> — RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br>`;
+          if (ndcs.length) {
+            resultHTML += `<table class='ndc-table'><tr><th>NDC</th><th>Lexicomp</th></tr>`;
+            ndcs.forEach(ndc => {
+              resultHTML += `<tr><td>${ndc}</td><td><a href='${lexicompLink(ndc)}' target='_blank'>Lexicomp</a></td></tr>`;
+            });
+            resultHTML += `</table><br>`;
+          } else {
+            resultHTML += `No NDCs found.<br><br>`;
+          }
+        }
+        output.innerHTML = resultHTML;
         return;
       }
 
-      const prop2 = await getNdcProperties(input2);
-      const rxcui1 = prop1.rxcui;
-      const rxcui2 = prop2.rxcui;
+      // NDC vs NDC comparison
+      const [rxcui1, rxcui2] = await Promise.all([
+        getRxcuiFromNdc(input1),
+        getRxcuiFromNdc(input2)
+      ]);
 
-      const match = rxcui1 && rxcui2 && rxcui1 === rxcui2;
+      if (!rxcui1 || !rxcui2) {
+        output.innerHTML = "One or both NDCs not found.";
+        return;
+      }
+
+      const match = rxcui1 === rxcui2;
       const status = match
         ? "✔️ <b>Equivalent RxCUI</b>"
         : "⚠️ <b>Different RxCUI</b> — may still be clinically equivalent";
 
-      displayHTML += `${status}<br><br>`;
-      displayHTML += `<table class="ndc-table">
-        <tr><th></th><th>NDC</th><th>RxCUI</th><th>Labeler</th><th>Package</th><th>Lexicomp</th></tr>
-        <tr>
-          <td><b>Box 1</b></td>
-          <td>${input1}</td>
-          <td>${rxcui1 || 'Unknown'}</td>
-          <td>${prop1.labelerName || 'Unknown'}</td>
-          <td>${prop1.packageDescription || 'Unknown'}</td>
-          <td><a href='${lexicompLink(input1)}' target='_blank'>Link</a></td>
-        </tr>
-        <tr>
-          <td><b>Box 2</b></td>
-          <td>${input2}</td>
-          <td>${rxcui2 || 'Unknown'}</td>
-          <td>${prop2.labelerName || 'Unknown'}</td>
-          <td>${prop2.packageDescription || 'Unknown'}</td>
-          <td><a href='${lexicompLink(input2)}' target='_blank'>Link</a></td>
-        </tr>
-      </table>`;
+      output.innerHTML =
+        `${status}<br><br>` +
+        `NDC 1 RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui1}' target='_blank'>${rxcui1}</a> — <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>` +
+        `NDC 2 RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui2}' target='_blank'>${rxcui2}</a> — <a href='${lexicompLink(input2)}' target='_blank'>Lexicomp</a><br>` +
+        `<br>🔍 <i>Note: Use clinical judgment. RxCUI mismatch doesn't guarantee clinical difference.</i>`;
 
-      displayHTML += `<br>🔍 <i>Note: Use clinical judgment. RxCUI mismatch doesn't guarantee clinical difference.</i>`;
-      output.innerHTML = displayHTML;
     } catch (err) {
       output.innerHTML = "⚠️ Error: " + err.message;
     }
