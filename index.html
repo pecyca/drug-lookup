@@ -38,6 +38,9 @@
       margin-top: 10px;
       border-left: 4px solid #9d4edd;
     }
+    .child-result {
+      margin-left: 20px;
+    }
     .ndc-table {
       width: 100%;
       border-collapse: collapse;
@@ -172,13 +175,13 @@
 
           resultHTML += `<b>${name}</b> — RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br>`;
           if (ndcs.length) {
-            resultHTML += `<table class='ndc-table'><tr><th>NDC</th><th>Lexicomp</th></tr>`;
+            resultHTML += `<div class='child-result'><table class='ndc-table'><tr><th>NDC</th><th>Lexicomp</th></tr>`;
             ndcs.forEach(ndc => {
               resultHTML += `<tr><td>${ndc}</td><td><a href='${lexicompLink(ndc)}' target='_blank'>Lexicomp</a></td></tr>`;
             });
-            resultHTML += `</table><br>`;
+            resultHTML += `</table></div><br>`;
           } else {
-            resultHTML += `No NDCs found.<br><br>`;
+            resultHTML += `<div class='child-result'>No NDCs found.</div><br>`;
           }
         }
         output.innerHTML = resultHTML;
