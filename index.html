@@ -5,24 +5,44 @@
   <style>
     body {
       font-family: Arial, sans-serif;
+      background-color: #fdf9ff;
+      color: #2e003e;
       padding: 20px;
       max-width: 700px;
       margin: auto;
-      background-color: #fdf9ff;
-      color: #2e003e;
+    }
+    h2 {
+      color: #4b007d;
     }
     input, button {
-      padding: 8px;
+      padding: 10px;
       margin: 5px 0;
       width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1em;
     }
-    button { cursor: pointer; }
+    button {
+      background-color: #6a1b9a;
+      color: white;
+      font-weight: bold;
+      border: none;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #4b007d;
+    }
     pre, #result {
       background: #f2f2f2;
       padding: 15px;
-      white-space: pre-wrap;
       border-left: 4px solid #ccc;
       margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    .note {
+      font-size: 0.9em;
+      color: #444;
+      margin-bottom: 15px;
     }
     .disclaimer {
       margin-top: 40px;
@@ -31,14 +51,10 @@
       border-top: 1px solid #ccc;
       padding-top: 15px;
     }
-    .note {
-      font-size: 0.9em;
-      color: #444;
-      margin-bottom: 15px;
-    }
   </style>
 </head>
 <body>
+
   <h2>NDC Comparison & Drug Lookup</h2>
 
   <div class="note">
@@ -68,7 +84,6 @@
   }
 
   function formatNdcPretty(ndc) {
-    ndc = ndc.padStart(11, '0');
     return ndc.slice(0, 5) + '-' + ndc.slice(5, 9) + '-' + ndc.slice(9);
   }
 
@@ -101,57 +116,52 @@
     }
   }
 
-  async function getSetIdFromNdc(ndc) {
+  async function getSetIdFromRawNdc(rawNdc) {
     try {
-      const res = await fetch(`https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?ndc=${ndc}`);
-      const json = await res.json();
-      return json?.data?.spls?.[0]?.setid || null;
+      const response = await fetch(`https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?ndc=${rawNdc}`);
+      const data = await response.json();
+      return data?.data?.spls?.[0]?.setid || null;
     } catch {
       return null;
     }
   }
 
   async function compareNDCs() {
-    const rawNdc1 = document.getElementById("ndc1").value.trim();
-    const rawNdc2 = document.getElementById("ndc2").value.trim();
-    const output = document.getElementById("result");
-    output.innerHTML = "Loading...";
+    const rawInput1 = document.getElementById("ndc1").value.trim();
+    const rawInput2 = document.getElementById("ndc2").value.trim();
+    const result = document.getElementById("result");
+    result.innerHTML = "Loading...";
 
-    if (!rawNdc1 && !rawNdc2) {
-      output.innerHTML = "Please enter at least one NDC.";
+    if (!rawInput1 && !rawInput2) {
+      result.innerHTML = "Please enter at least one NDC.";
       return;
     }
 
-    const ndc1 = normalizeNdc(rawNdc1);
-    const ndc2 = normalizeNdc(rawNdc2);
+    const ndc1 = normalizeNdc(rawInput1);
+    const ndc2 = normalizeNdc(rawInput2);
 
     try {
-      if (rawNdc1 && !rawNdc2) {
+      if (ndc1 && !ndc2) {
         const { rxcui, formattedNdc } = await getRxcuiFromNdc(ndc1);
         if (!rxcui) {
-          output.innerHTML = "NDC not found.";
+          result.innerHTML = "NDC not found.";
           return;
         }
 
-        const [brand1, form1, setid] = await Promise.all([
+        const [brand, form, setid] = await Promise.all([
           getBrandName(rxcui),
           getFormName(rxcui),
-          getSetIdFromNdc(formattedNdc)
+          getSetIdFromRawNdc(ndc1)
         ]);
 
-        let moreInfo = "";
-        if (setid) {
-          moreInfo = `<a href='https://pecyca.github.io/drug-lookup/details.html?ndc=${formattedNdc}' target='_blank'>More Info (DailyMed)</a><br>`;
-        }
-
-        output.innerHTML =
+        result.innerHTML =
           "<b>🧾 Drug Information (NDC 1)</b><br><br>" +
-          "Brand: " + brand1 + "<br>" +
-          "Form: " + form1 + "<br>" +
+          "Brand: " + brand + "<br>" +
+          "Form: " + form + "<br>" +
           "RxCUI: " + rxcui + "<br><br>" +
           `<a href='https://online.lexi.com/lco/action/search?q=${formattedNdc}&t=name' target='_blank'>View on Lexicomp</a><br>` +
           `<a href='https://pecyca.github.io/drug-lookup/details.html?rxcui=${rxcui}' target='_blank'>Detailed Info</a><br>` +
-          moreInfo;
+          (setid ? `<a href='https://pecyca.github.io/drug-lookup/details.html?ndc=${ndc1}' target='_blank'>More Info (DailyMed)</a><br>` : "");
         return;
       }
 
@@ -160,13 +170,11 @@
         getRxcuiFromNdc(ndc2)
       ]);
 
-      const rxcui1 = res1.rxcui;
-      const rxcui2 = res2.rxcui;
-      const formatted1 = res1.formattedNdc;
-      const formatted2 = res2.formattedNdc;
+      const [rxcui1, rxcui2] = [res1.rxcui, res2.rxcui];
+      const [formatted1, formatted2] = [res1.formattedNdc, res2.formattedNdc];
 
       if (!rxcui1 || !rxcui2) {
-        output.innerHTML = "One or both NDCs not found.";
+        result.innerHTML = "One or both NDCs not found.";
         return;
       }
 
@@ -175,8 +183,8 @@
         getFormName(rxcui1),
         getBrandName(rxcui2),
         getFormName(rxcui2),
-        getSetIdFromNdc(formatted1),
-        getSetIdFromNdc(formatted2)
+        getSetIdFromRawNdc(ndc1),
+        getSetIdFromRawNdc(ndc2)
       ]);
 
       const sameRxcui = rxcui1 === rxcui2;
@@ -184,7 +192,7 @@
         ? "✔️ <b>Equivalent RxCUI</b>"
         : "⚠️ <b>Different RxCUI</b> — may still be clinically equivalent";
 
-      output.innerHTML =
+      result.innerHTML =
         status + "<br><br>" +
         "<b>NDC 1:</b><br>" +
         "Brand: " + brand1 + "<br>" +
@@ -192,26 +200,24 @@
         "RxCUI: " + rxcui1 + "<br>" +
         `<a href='https://online.lexi.com/lco/action/search?q=${formatted1}&t=name' target='_blank'>View on Lexicomp</a><br>` +
         `<a href='https://pecyca.github.io/drug-lookup/details.html?rxcui=${rxcui1}' target='_blank'>Detailed Info (NDC 1)</a><br>` +
-        (setid1 ? `<a href='https://pecyca.github.io/drug-lookup/details.html?ndc=${formatted1}' target='_blank'>More Info (DailyMed NDC 1)</a><br><br>` : "<br><br>") +
+        (setid1 ? `<a href='https://pecyca.github.io/drug-lookup/details.html?ndc=${ndc1}' target='_blank'>More Info (DailyMed NDC 1)</a><br><br>` : "<br><br>") +
         "<b>NDC 2:</b><br>" +
         "Brand: " + brand2 + "<br>" +
         "Form: " + form2 + "<br>" +
         "RxCUI: " + rxcui2 + "<br>" +
         `<a href='https://online.lexi.com/lco/action/search?q=${formatted2}&t=name' target='_blank'>View on Lexicomp</a><br>` +
         `<a href='https://pecyca.github.io/drug-lookup/details.html?rxcui=${rxcui2}' target='_blank'>Detailed Info (NDC 2)</a><br>` +
-        (setid2 ? `<a href='https://pecyca.github.io/drug-lookup/details.html?ndc=${formatted2}' target='_blank'>More Info (DailyMed NDC 2)</a><br><br>` : "<br><br>") +
-        "🔍 <i>Note: Two drugs may be clinically equivalent even if RxCUIs differ (e.g., different release forms or packages). Use judgment + references.</i>";
+        (setid2 ? `<a href='https://pecyca.github.io/drug-lookup/details.html?ndc=${ndc2}' target='_blank'>More Info (DailyMed NDC 2)</a><br>` : "") +
+        "<br>🔍 <i>Note: Two drugs may be clinically equivalent even if RxCUIs differ (e.g., different release forms or packages). Use judgment + references.</i>";
     } catch (err) {
-      output.innerHTML = "⚠️ Error: " + err.message;
+      result.innerHTML = "⚠️ Error: " + err.message;
     }
   }
 
   window.onerror = function (msg, src, line, col, err) {
-    const output = document.getElementById("result");
-    if (output) {
-      output.innerHTML = "JavaScript Error: " + msg + " at line " + line;
-    }
+    document.getElementById("result").innerHTML = "JavaScript Error: " + msg + " at line " + line;
   };
 </script>
+
 </body>
 </html>
