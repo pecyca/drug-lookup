@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Drug Detail Lookup</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 700px;
+      margin: auto;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .section {
+      background: #f9f9f9;
+      margin-bottom: 10px;
+      padding: 10px 15px;
+      border-left: 4px solid #ccc;
+    }
+    .section h3 {
+      margin: 0 0 5px 0;
+      font-size: 16px;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h2>Drug Detail Lookup</h2>
+  <div id="content">Loading...</div>
+
+  <script>
+    async function getJsonSafely(url) {
+      const res = await fetch(url);
+      const text = await res.text();
+      if (!text.startsWith('{')) throw new Error('No data or invalid format from: ' + url);
+      return JSON.parse(text);
+    }
+
+    async function getDailyMedStructuredData(name) {
+      const searchUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls.json?drug_name=${encodeURIComponent(name)}`;
+      const searchRes = await fetch(searchUrl);
+      const searchJson = await searchRes.json();
+      const setId = searchJson?.data?.[0]?.setid;
+      if (!setId) return null;
+
+      const structuredUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${setId}/structured-product-labeling.json`;
+      const structuredRes = await fetch(structuredUrl);
+      const structuredJson = await structuredRes.json();
+
+      return structuredJson?.data || null;
+    }
+
+    async function loadDetails() {
+      const params = new URLSearchParams(window.location.search);
+      const rxcui = params.get("rxcui");
+      const content = document.getElementById("content");
+
+      if (!rxcui) {
+        content.innerHTML = '<div class="error">No RxCUI provided in the URL.</div>';
+        return;
+      }
+
+      try {
+        const properties = await getJsonSafely(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/properties.json`);
+        const name = properties?.properties?.name || "";
+
+        let dailyMedHTML = "<div class=\"section\"><h3>DailyMed</h3>Information not available.</div>";
+        const dailymedData = await getDailyMedStructuredData(name);
+
+        if (dailymedData) {
+          dailyMedHTML = `
+            <div class="section">
+              <h3>DailyMed</h3>
+              <strong>Storage:</strong> ${dailymedData.storage || "N/A"}<br>
+              <strong>Dosage and Administration:</strong> ${dailymedData.dosage_and_administration || "N/A"}<br>
+              <strong>How Supplied:</strong> ${dailymedData.how_supplied || "N/A"}<br>
+              <strong>Indications and Usage:</strong> ${dailymedData.indications_and_usage || "N/A"}<br>
+            </div>
+          `;
+        }
+
+        content.innerHTML = `${dailyMedHTML}`;
+      } catch (err) {
+        content.innerHTML = `<div class="error">Error loading details: ${err.message}</div>`;
+      }
+    }
+
+    loadDetails();
+  </script>
+</body>
+</html>
