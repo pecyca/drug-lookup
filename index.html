@@ -38,23 +38,8 @@
       margin-top: 10px;
       border-left: 4px solid #9d4edd;
     }
-    .note {
-      font-size: 0.9em;
-      color: #444;
-      margin-bottom: 15px;
-    }
-    a {
-      color: #5a189a;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
+    .child-result {
+      margin-left: 20px;
     }
     .disclaimer {
       margin-top: 40px;
@@ -62,6 +47,14 @@
       color: #666;
       border-top: 1px solid #ccc;
       padding-top: 15px;
+    }
+    .note {
+      font-size: 0.9em;
+      color: #444;
+      margin-bottom: 15px;
+    }
+    a {
+      color: #5a189a;
     }
   </style>
 </head>
@@ -103,16 +96,13 @@
     return json?.ndcPropertyList?.ndcProperty?.[0] || {};
   }
 
-  function rxcuiLink(rxcui) {
-    return `https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}`;
+  async function getRxcuiFromNdc(ndc) {
+    const prop = await getNdcProperties(ndc);
+    return prop?.rxcui || null;
   }
 
   function lexicompLink(ndc) {
     return `https://online.lexi.com/lco/action/search?q=${ndc}&t=name`;
-  }
-
-  function detailsLink(ndc) {
-    return `details.html?ndc=${ndc}`;
   }
 
   function resetForm() {
@@ -139,13 +129,10 @@
       if (!input2) {
         displayHTML += `<b>${prop1.proprietaryName || 'Unknown'}</b><br>`;
         displayHTML += `NDC: ${input1}<br>`;
-        displayHTML += `RxCUI: ${prop1.rxcui || 'Unknown'} `;
-        if (prop1.rxcui) displayHTML += `— <a href='${rxcuiLink(prop1.rxcui)}' target='_blank'>RxNav</a><br>`;
-        else displayHTML += `<br>`;
+        displayHTML += `RxCUI: ${prop1.rxcui || 'Unknown'}<br>`;
         displayHTML += `Labeler: ${prop1.labelerName || 'Unknown'}<br>`;
         displayHTML += `Package: ${prop1.packageDescription || 'Unknown'}<br>`;
         displayHTML += `Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Link</a><br>`;
-        displayHTML += `Details: <a href='${detailsLink(input1)}' target='_blank'>More Info</a><br>`;
         output.innerHTML = displayHTML;
         return;
       }
@@ -160,25 +147,23 @@
         : "⚠️ <b>Different RxCUI</b> — may still be clinically equivalent";
 
       displayHTML += `${status}<br><br>`;
-      displayHTML += `<table>
-        <tr><th></th><th>NDC</th><th>RxCUI</th><th>Labeler</th><th>Package</th><th>Lexicomp</th><th>Details</th></tr>
+      displayHTML += `<table class="ndc-table">
+        <tr><th></th><th>NDC</th><th>RxCUI</th><th>Labeler</th><th>Package</th><th>Lexicomp</th></tr>
         <tr>
           <td><b>Box 1</b></td>
           <td>${input1}</td>
-          <td>${rxcui1 ? `<a href='${rxcuiLink(rxcui1)}' target='_blank'>${rxcui1}</a>` : 'Unknown'}</td>
+          <td>${rxcui1 || 'Unknown'}</td>
           <td>${prop1.labelerName || 'Unknown'}</td>
           <td>${prop1.packageDescription || 'Unknown'}</td>
           <td><a href='${lexicompLink(input1)}' target='_blank'>Link</a></td>
-          <td><a href='${detailsLink(input1)}' target='_blank'>More Info</a></td>
         </tr>
         <tr>
           <td><b>Box 2</b></td>
           <td>${input2}</td>
-          <td>${rxcui2 ? `<a href='${rxcuiLink(rxcui2)}' target='_blank'>${rxcui2}</a>` : 'Unknown'}</td>
+          <td>${rxcui2 || 'Unknown'}</td>
           <td>${prop2.labelerName || 'Unknown'}</td>
           <td>${prop2.packageDescription || 'Unknown'}</td>
           <td><a href='${lexicompLink(input2)}' target='_blank'>Link</a></td>
-          <td><a href='${detailsLink(input2)}' target='_blank'>More Info</a></td>
         </tr>
       </table>`;
 
