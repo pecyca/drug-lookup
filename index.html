@@ -42,6 +42,10 @@
   </div>
 
 <script>
+  function cleanNdcInput(ndc) {
+    return ndc.replace(/[^0-9]/g, ''); // Remove non-digit characters
+  }
+
   function formatNdc(ndc) {
     ndc = ndc.padStart(11, '0');
     return ndc.slice(0, 5) + '-' + ndc.slice(5, 9) + '-' + ndc.slice(9, 11);
@@ -79,8 +83,12 @@
   }
 
   async function compareNDCs() {
-    const ndc1 = document.getElementById("ndc1").value.trim();
-    const ndc2 = document.getElementById("ndc2").value.trim();
+    const ndc1Raw = document.getElementById("ndc1").value.trim();
+    const ndc2Raw = document.getElementById("ndc2").value.trim();
+
+    const ndc1 = cleanNdcInput(ndc1Raw);
+    const ndc2 = cleanNdcInput(ndc2Raw);
+
     const output = document.getElementById("result");
     output.innerHTML = "Loading...";
 
@@ -96,6 +104,7 @@
           output.innerHTML = "NDC not found.";
           return;
         }
+
         const [brand1, form1, setid] = await Promise.all([
           getBrandName(rxcui),
           getFormName(rxcui),
@@ -112,8 +121,8 @@
           "Brand: " + brand1 + "<br>" +
           "Form: " + form1 + "<br>" +
           "RxCUI: " + rxcui + "<br><br>" +
-          "<a href='https://online.lexi.com/lco/action/search?q=" + formattedNdc + "&t=name' target='_blank'>View on Lexicomp</a><br>" +
-          "<a href='https://pecyca.github.io/drug-lookup/details.html?rxcui=" + rxcui + "' target='_blank'>Detailed Info</a><br>" +
+          `<a href='https://online.lexi.com/lco/action/search?q=${formattedNdc}&t=name' target='_blank'>View on Lexicomp</a><br>` +
+          `<a href='https://pecyca.github.io/drug-lookup/details.html?rxcui=${rxcui}' target='_blank'>Detailed Info</a><br>` +
           moreInfo;
         return;
       }
@@ -176,6 +185,7 @@
     }
   };
 </script>
+
 
 </body>
 </html>
