@@ -93,12 +93,6 @@
     return json?.ndcPropertyList?.ndcProperty?.[0] || {};
   }
 
-  async function getFormName(rxcui) {
-    const res = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/properties.json`);
-    const json = await res.json();
-    return json?.properties?.name || "Unknown";
-  }
-
   async function getBrandName(rxcui) {
     try {
       const res = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/related.json?tty=BN`);
@@ -143,7 +137,7 @@
       const prop1 = await getNdcProperties(input1);
       const rxcui1 = prop1.rxcui;
       const brand1 = prop1.proprietaryName || 'Unknown';
-      const form1 = await getFormName(rxcui1);
+      const form1 = prop1.name || 'Unknown';
 
       if (!input2) {
         output.innerHTML =
@@ -159,7 +153,7 @@
       const prop2 = await getNdcProperties(input2);
       const rxcui2 = prop2.rxcui;
       const brand2 = prop2.proprietaryName || 'Unknown';
-      const form2 = await getFormName(rxcui2);
+      const form2 = prop2.name || 'Unknown';
 
       const sameRxcui = rxcui1 === rxcui2;
       const status = sameRxcui
