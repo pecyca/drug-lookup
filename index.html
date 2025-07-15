@@ -94,9 +94,9 @@
   }
 
   async function getRxcuiFromDrugName(name) {
-    const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui.json?name=" + encodeURIComponent(name));
+    const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(name));
     const json = await res.json();
-    return json?.idGroup?.rxnormId?.[0] || null;
+    return json?.approximateGroup?.candidate?.[0]?.rxcui || null;
   }
 
   async function getBrandName(rxcui) {
@@ -117,6 +117,10 @@
     return json?.ndcGroup?.ndcList?.ndc || [];
   }
 
+  function lexicompLink(ndc) {
+    return `https://online.lexi.com/lco/action/search?q=${ndc}&t=name`;
+  }
+
   async function compareNDCs() {
     const input1 = document.getElementById("ndc1").value.trim();
     const input2 = document.getElementById("ndc2").value.trim();
@@ -131,6 +135,7 @@
     try {
       if (input1 && !input2) {
         let rxcui = await getRxcuiFromNdc(input1);
+        let ndcFormatted = formatNdc(input1);
         if (!rxcui) rxcui = await getRxcuiFromDrugName(input1);
 
         if (!rxcui) {
@@ -145,7 +150,7 @@
         const ndcs = await getNdcListFromRxcui(rxcui);
 
         const ndcListHTML = ndcs.length
-          ? ndcs.map(n => `• ${n}`).join("\n")
+          ? ndcs.map(n => `• ${n} (<a href='${lexicompLink(n)}' target='_blank'>Lexicomp</a>)`).join("\n")
           : "No NDCs found.";
 
         output.innerHTML =
@@ -182,11 +187,13 @@
         `<b>NDC 1:</b><br>` +
         `Name: ${name1}<br>` +
         `Brand: ${brand1}<br>` +
-        `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui1}' target='_blank'>${rxcui1}</a><br><br>` +
+        `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui1}' target='_blank'>${rxcui1}</a><br>` +
+        `<a href='${lexicompLink(input1)}' target='_blank'>Lexicomp Info</a><br><br>` +
         `<b>NDC 2:</b><br>` +
         `Name: ${name2}<br>` +
         `Brand: ${brand2}<br>` +
-        `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui2}' target='_blank'>${rxcui2}</a><br><br>` +
+        `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui2}' target='_blank'>${rxcui2}</a><br>` +
+        `<a href='${lexicompLink(input2)}' target='_blank'>Lexicomp Info</a><br><br>` +
         `🔍 <i>Note: Two drugs may be clinically equivalent even if RxCUIs differ (e.g., different release forms or packages). Use clinical judgment and references.</i>`;
 
     } catch (err) {
