@@ -60,27 +60,14 @@
         return;
       }
 
-      const propsRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/allProperties.json?prop=all`);
-      const propsData = await propsRes.json();
-
       let setid = null;
-
-      const propConcepts = propsData?.propConceptGroup?.propConcept || [];
-      for (const item of propConcepts) {
-        if (item.propName === 'SPL SET ID') {
-          setid = item.propValue;
-          break;
-        }
-      }
-
-      if (!setid) {
-        const properties = propsData?.rxnormProperty || [];
-        for (const item of properties) {
-          if (item.propName === 'SPL SET ID') {
-            setid = item.propValue;
-            break;
-          }
-        }
+      try {
+        const splRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/spls.json`);
+        const splData = await splRes.json();
+        setid = splData?.splSetIdList?.splSetId?.[0];
+      } catch (err) {
+        document.getElementById('details').innerHTML = 'Failed to retrieve SPL SET ID.';
+        return;
       }
 
       if (!setid) {
