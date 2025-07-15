@@ -94,16 +94,10 @@
     return json?.ndcPropertyList?.ndcProperty?.[0]?.rxcui || null;
   }
 
-  async function getRxcuiFromDrugName(name) {
+  async function getRxcuiCandidates(name) {
     const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(name));
     const json = await res.json();
-    const candidates = json?.approximateGroup?.candidate || [];
-    for (let c of candidates) {
-      const rxcui = c.rxcui;
-      const ndcs = await getNdcListFromRxcui(rxcui);
-      if (ndcs.length) return rxcui;
-    }
-    return candidates[0]?.rxcui || null;
+    return json?.approximateGroup?.candidate?.map(c => c.rxcui) || [];
   }
 
   async function getBrandName(rxcui) {
@@ -147,31 +141,42 @@
 
     try {
       if (input1 && !input2) {
-        let rxcui = await getRxcuiFromNdc(input1);
+        let rxcuis = [];
         let ndcFormatted = formatNdc(input1);
-        if (!rxcui) rxcui = await getRxcuiFromDrugName(input1);
+        let rxcuiFromNdc = await getRxcuiFromNdc(input1);
 
-        if (!rxcui) {
+        if (rxcuiFromNdc) {
+          rxcuis = [rxcuiFromNdc];
+        } else {
+          rxcuis = await getRxcuiCandidates(input1);
+        }
+
+        if (!rxcuis.length) {
           output.innerHTML = "No RxCUI found for input.";
           return;
         }
 
-        const [name, brand] = await Promise.all([
-          getFullName(rxcui),
-          getBrandName(rxcui)
-        ]);
-        const ndcs = await getNdcListFromRxcui(rxcui);
+        let resultHTML = "";
+        for (let rxcui of rxcuis) {
+          const [name, brand, ndcs] = await Promise.all([
+            getFullName(rxcui),
+            getBrandName(rxcui),
+            getNdcListFromRxcui(rxcui)
+          ]);
 
-        const ndcListHTML = ndcs.length
-          ? ndcs.map(n => `• ${n} (<a href='${lexicompLink(n)}' target='_blank'>Lexicomp</a>)`).join("\n")
-          : "No NDCs found.";
+          const ndcListHTML = ndcs.length
+            ? ndcs.map(n => `• ${n} (<a href='${lexicompLink(n)}' target='_blank'>Lexicomp</a>)`).join("\n")
+            : "No NDCs found.";
 
-        output.innerHTML =
-          `<b>🧾 Drug Information</b><br><br>` +
-          `Name: ${name}<br>` +
-          `Brand: ${brand}<br>` +
-          `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br><br>` +
-          `<b>NDCs:</b><br><pre>${ndcListHTML}</pre>`;
+          resultHTML +=
+            `<b>🧾 Drug Information</b><br><br>` +
+            `Name: ${name}<br>` +
+            `Brand: ${brand}<br>` +
+            `RxCUI: <a href='https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}' target='_blank'>${rxcui}</a><br><br>` +
+            `<b>NDCs:</b><br><pre>${ndcListHTML}</pre><br><hr><br>`;
+        }
+
+        output.innerHTML = resultHTML;
         return;
       }
 
