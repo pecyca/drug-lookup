@@ -97,7 +97,13 @@
   async function getRxcuiFromDrugName(name) {
     const res = await fetch("https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=" + encodeURIComponent(name));
     const json = await res.json();
-    return json?.approximateGroup?.candidate?.[0]?.rxcui || null;
+    const candidates = json?.approximateGroup?.candidate || [];
+    for (let c of candidates) {
+      const rxcui = c.rxcui;
+      const ndcs = await getNdcListFromRxcui(rxcui);
+      if (ndcs.length) return rxcui;
+    }
+    return candidates[0]?.rxcui || null;
   }
 
   async function getBrandName(rxcui) {
