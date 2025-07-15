@@ -64,7 +64,7 @@
 
 <script>
   function normalizeNdc(ndc) {
-    return ndc.replace(/-/g, '').padStart(11, '0');
+    return ndc.replace(/[^0-9]/g, '').padStart(11, '0');
   }
 
   function formatNdcPretty(ndc) {
@@ -74,7 +74,7 @@
 
   async function getRxcuiFromNdc(ndc) {
     const formatted = formatNdcPretty(ndc);
-    const res = await fetch("https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=" + formatted + "&idtype=NDC");
+    const res = await fetch(`https://rxnav.nlm.nih.gov/REST/ndcproperties.json?id=${formatted}&idtype=NDC`);
     const json = await res.json();
     const item = json?.ndcPropertyList?.ndcProperty?.[0];
     return { rxcui: item?.rxcui || null, formattedNdc: formatted };
@@ -82,7 +82,7 @@
 
   async function getBrandName(rxcui) {
     try {
-      const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/related.json?tty=BN");
+      const res = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/related.json?tty=BN`);
       const json = await res.json();
       const props = json?.relatedGroup?.conceptGroup?.[0]?.conceptProperties;
       return props?.[0]?.name || "Unknown";
@@ -93,7 +93,7 @@
 
   async function getFormName(rxcui) {
     try {
-      const res = await fetch("https://rxnav.nlm.nih.gov/REST/rxcui/" + rxcui + "/properties.json");
+      const res = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/properties.json`);
       const json = await res.json();
       return json?.properties?.name || "Unknown";
     } catch {
