@@ -44,19 +44,54 @@
     return params.get(name);
   }
 
-  // Try via RxCUI, then NDC, then Set ID.
+  // Always show a fallback manual link
+  function manualLinks({ setid, ndc, rxcui }) {
+    let links = [];
+    if (setid) links.push(`<a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${setid}" target="_blank">View on DailyMed (by Set ID)</a>`);
+    if (ndc) links.push(`<a href="https://dailymed.nlm.nih.gov/dailymed/search.cfm?query=${ndc}" target="_blank">Search DailyMed (by NDC)</a>`);
+    if (rxcui) links.push(`<a href="https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${encodeURIComponent(rxcui)}" target="_blank">View in RxNav (by RxCUI)</a>`);
+    return links.length ? `<br><br><b>Manual Links:</b><br>${links.join('<br>')}` : '';
+  }
+
   async function loadDetails() {
     const infoDiv = document.getElementById("info");
-    // Try to get all possible params
-    const rxcui = getQueryParam("rxcui");
-    let ndc = getQueryParam("ndc");
+    // Gather identifiers
     let setid = getQueryParam("setid");
+    let ndc = getQueryParam("ndc");
+    let rxcui = getQueryParam("rxcui");
 
-    infoDiv.innerHTML = 'Loading...';
+    // Priority: Set ID
+    if (setid) {
+      // Try DailyMed API by Set ID
+      infoDiv.innerHTML = `Fetching details from DailyMed using Set ID...`;
+      if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
+      // If API fails, show manual link
+      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
+      return;
+    }
 
-    // Try 1: RxCUI → SPL_SET_ID → DailyMed
+    // Next, try NDC
+    if (ndc) {
+      infoDiv.innerHTML = `Fetching SPL Set ID from DailyMed using NDC...`;
+      let ndcClean = ndc.replace(/[^0-9]/g, "");
+      try {
+        let ndcRes = await fetch(`https://dailymed.nlm.nih.gov/dailymed/services/v2/ndc/${ndcClean}.json`);
+        if (ndcRes.ok) {
+          let ndcJson = await ndcRes.json();
+          let spls = ndcJson.data?.spls;
+          if (spls && spls.length > 0 && spls[0].setid) {
+            setid = spls[0].setid;
+            if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
+          }
+        }
+      } catch (err) {}
+      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
+      return;
+    }
+
+    // Last, try RxCUI → Set ID via RxNorm
     if (rxcui) {
-      infoDiv.innerHTML = 'Looking up SPL Set ID from RxNorm (via RxCUI)...';
+      infoDiv.innerHTML = `Looking up SPL Set ID from RxNorm using RxCUI...`;
       try {
         const rxRes = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/allProperties.json?prop=all`);
         const rxJson = await rxRes.json();
@@ -64,62 +99,25 @@
         const spl = props.find(p => p.propName === "SPL_SET_ID");
         if (spl?.propValue) {
           setid = spl.propValue;
-          // Proceed to DailyMed with setid
-          return fetchAndRenderDailyMed(infoDiv, { setid, rxcui });
+          if (await fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui })) return;
         }
-      } catch (err) {
-        // continue to next method
-      }
-      infoDiv.innerHTML += "<br>Could not retrieve SPL Set ID via RxCUI.";
+      } catch (err) {}
+      infoDiv.innerHTML += `<br><span class="error">Failed to fetch details via API.</span>${manualLinks({ setid, ndc, rxcui })}`;
+      return;
     }
 
-    // Try 2: NDC → DailyMed
-    if (ndc) {
-      infoDiv.innerHTML += '<br>Trying DailyMed with NDC...';
-      // NDC must be in 10 or 11 digit format, strip dashes
-      let ndcClean = ndc.replace(/[^0-9]/g, "");
-      // If 10 digits, try direct, if 11 digits, also try direct
-      try {
-        let ndcUrl = `https://dailymed.nlm.nih.gov/dailymed/services/v2/ndc/${ndcClean}.json`;
-        let ndcRes = await fetch(ndcUrl);
-        if (ndcRes.ok) {
-          let ndcJson = await ndcRes.json();
-          // Try to extract setid from returned data
-          let spls = ndcJson.data?.spls;
-          if (spls && spls.length > 0 && spls[0].setid) {
-            setid = spls[0].setid;
-            return fetchAndRenderDailyMed(infoDiv, { setid, ndc });
-          }
-        }
-      } catch (err) {
-        // continue to next method
-      }
-      infoDiv.innerHTML += "<br>Could not retrieve SPL Set ID via NDC.";
-    }
-
-    // Try 3: Direct Set ID (from query param)
-    if (setid) {
-      infoDiv.innerHTML += '<br>Trying DailyMed with Set ID...';
-      return fetchAndRenderDailyMed(infoDiv, { setid });
-    }
-
-    // No methods worked
-    infoDiv.innerHTML += `<br><span class="error">Unable to retrieve drug details.<br>
-      No valid RxCUI, NDC, or SPL Set ID found/provided or matched a DailyMed record.</span>`;
+    // If nothing provided
+    infoDiv.innerHTML = `<span class="error">No RxCUI, NDC, or Set ID provided in URL!</span>`;
   }
 
-  // Helper: fetch & display info from DailyMed using Set ID
-  async function fetchAndRenderDailyMed(infoDiv, { setid, rxcui, ndc }) {
-    infoDiv.innerHTML = 'Fetching details from DailyMed...';
+  // Fetch & display info from DailyMed using Set ID
+  async function fetchAndRenderDailyMed(infoDiv, { setid, ndc, rxcui }) {
     try {
       const dailyMedRes = await fetch(`https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/${setid}.json`);
       if (!dailyMedRes.ok) throw new Error('DailyMed returned non-OK status');
       const dailyMedJson = await dailyMedRes.json();
-
-      // Basic summary rendering
       const setInfo = dailyMedJson.data?.spls?.[0];
       if (!setInfo) throw new Error('No SPL data found');
-
       infoDiv.innerHTML = `
         <b>${setInfo.title || "No Title"}</b><br>
         <b>Set ID:</b> ${setid}<br>
@@ -136,21 +134,11 @@
         <br>
         <b>Full Label:</b>
         <a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${setid}" target="_blank">View on DailyMed</a>
-        <br><br>
-        <b>Sources:</b>
-        <ul>
-          ${rxcui ? `<li><a href="https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${encodeURIComponent(rxcui)}" target="_blank">RxNav Record</a></li>` : ""}
-          <li><a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${setid}" target="_blank">DailyMed Entry</a></li>
-        </ul>
+        ${manualLinks({ setid, ndc, rxcui })}
       `;
+      return true;
     } catch (e) {
-      infoDiv.innerHTML = `
-        <span class="error">Failed to fetch details from DailyMed.<br>
-        <small>${e.message}</small>
-        </span>
-        <br>
-        <a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${setid}" target="_blank">Try viewing on DailyMed</a>
-      `;
+      return false;
     }
   }
 
