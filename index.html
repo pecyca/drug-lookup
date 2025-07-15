@@ -93,17 +93,6 @@
     return json?.ndcPropertyList?.ndcProperty?.[0] || {};
   }
 
-  async function getBrandName(rxcui) {
-    try {
-      const res = await fetch(`https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/related.json?tty=BN`);
-      const json = await res.json();
-      const props = json?.relatedGroup?.conceptGroup?.[0]?.conceptProperties;
-      return props?.[0]?.name || "Unknown";
-    } catch {
-      return "Unknown";
-    }
-  }
-
   function rxcuiLink(rxcui) {
     return `https://mor.nlm.nih.gov/RxNav/search?searchBy=RXCUI&searchTerm=${rxcui}`;
   }
@@ -145,7 +134,7 @@
           NDC: ${input1}<br>
           Form: ${form1}<br>
           RxCUI: ${rxcui1} — <a href='${rxcuiLink(rxcui1)}' target='_blank'>RxNav</a><br>
-          Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Link</a><br>
+          Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>
           Details: <a href='${detailsLink(rxcui1)}' target='_blank'>More Info</a>`;
         return;
       }
@@ -166,14 +155,14 @@
         Brand: ${brand1}<br>
         Form: ${form1}<br>
         RxCUI: ${rxcui1}<br>
-        <a href='${lexicompLink(input1)}' target='_blank'>Click for more information</a><br>
-        <a href='${detailsLink(rxcui1)}' target='_blank'>Click for Detailed Info (NDC 1)</a><br><br>
+        Lexicomp: <a href='${lexicompLink(input1)}' target='_blank'>Lexicomp</a><br>
+        Details: <a href='${detailsLink(rxcui1)}' target='_blank'>More Info</a><br><br>
         <b>NDC 2:</b><br>
         Brand: ${brand2}<br>
         Form: ${form2}<br>
         RxCUI: ${rxcui2}<br>
-        <a href='${lexicompLink(input2)}' target='_blank'>Click for more information</a><br>
-        <a href='${detailsLink(rxcui2)}' target='_blank'>Click for Detailed Info (NDC 2)</a><br><br>
+        Lexicomp: <a href='${lexicompLink(input2)}' target='_blank'>Lexicomp</a><br>
+        Details: <a href='${detailsLink(rxcui2)}' target='_blank'>More Info</a><br><br>
         🔍 <i>Note: Two drugs may be clinically equivalent even if RxCUIs differ (e.g., different release forms or packages). Use judgment + references.</i>`;
 
     } catch (err) {
